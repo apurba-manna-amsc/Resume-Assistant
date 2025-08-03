@@ -5,7 +5,7 @@ from resume_update import ResumeUpdater
 
 class SidebarChatWidget:
     """
-    Simple sidebar-based chat widget for resume updates
+    Theme-aware sidebar-based chat widget for resume updates
     """
     
     def __init__(self):
@@ -22,16 +22,91 @@ class SidebarChatWidget:
             st.session_state.previous_input = ""
     
     def inject_sidebar_css(self):
-        """Inject CSS for better sidebar chat styling"""
+        """Inject theme-aware CSS for better sidebar chat styling"""
         st.markdown("""
         <style>
-        /* Sidebar styling */
+        /* Theme-aware CSS variables */
+        :root {
+            --chat-bg-primary: #ffffff;
+            --chat-bg-secondary: #f8f9fa;
+            --chat-border: #dee2e6;
+            --chat-text: #333333;
+            --chat-text-muted: #6c757d;
+            --chat-success-bg: #d4edda;
+            --chat-success-text: #155724;
+            --chat-success-border: #c3e6cb;
+            --chat-error-bg: #f8d7da;
+            --chat-error-text: #721c24;
+            --chat-error-border: #f5c6cb;
+            --chat-user-bg: #007bff;
+            --chat-user-text: #ffffff;
+            --chat-shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Dark theme overrides */
+        [data-theme="dark"], .stApp[data-theme="dark"] {
+            --chat-bg-primary: #262730;
+            --chat-bg-secondary: #1e1e1e;
+            --chat-border: #404040;
+            --chat-text: #ffffff;
+            --chat-text-muted: #b3b3b3;
+            --chat-success-bg: #1e3a29;
+            --chat-success-text: #75dd8b;
+            --chat-success-border: #2d5a3d;
+            --chat-error-bg: #3a1e1e;
+            --chat-error-text: #ff8a8a;
+            --chat-error-border: #5a2d2d;
+            --chat-user-bg: #0066cc;
+            --chat-user-text: #ffffff;
+            --chat-shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Auto-detect dark theme from Streamlit */
+        @media (prefers-color-scheme: dark) {
+            .stApp {
+                --chat-bg-primary: #262730;
+                --chat-bg-secondary: #1e1e1e;
+                --chat-border: #404040;
+                --chat-text: #ffffff;
+                --chat-text-muted: #b3b3b3;
+                --chat-success-bg: #1e3a29;
+                --chat-success-text: #75dd8b;
+                --chat-success-border: #2d5a3d;
+                --chat-error-bg: #3a1e1e;
+                --chat-error-text: #ff8a8a;
+                --chat-error-border: #5a2d2d;
+                --chat-user-bg: #0066cc;
+                --chat-user-text: #ffffff;
+                --chat-shadow: rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        /* Additional detection for Streamlit's dark theme class */
+        .stApp[class*="dark"] {
+            --chat-bg-primary: #262730;
+            --chat-bg-secondary: #1e1e1e;
+            --chat-border: #404040;
+            --chat-text: #ffffff;
+            --chat-text-muted: #b3b3b3;
+            --chat-success-bg: #1e3a29;
+            --chat-success-text: #75dd8b;
+            --chat-success-border: #2d5a3d;
+            --chat-error-bg: #3a1e1e;
+            --chat-error-text: #ff8a8a;
+            --chat-error-border: #5a2d2d;
+            --chat-user-bg: #0066cc;
+            --chat-user-text: #ffffff;
+            --chat-shadow: rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Sidebar styling with theme awareness */
         .stSidebar {
-            background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+            background: linear-gradient(180deg, var(--chat-bg-secondary) 0%, var(--chat-bg-primary) 100%);
         }
         
         .stSidebar .stMarkdown {
             font-size: 14px;
+            color: var(--chat-text);
         }
         
         /* Chat message styling */
@@ -42,44 +117,46 @@ class SidebarChatWidget:
             font-size: 13px;
             line-height: 1.4;
             word-wrap: break-word;
+            box-shadow: 0 1px 3px var(--chat-shadow);
+            transition: all 0.2s ease;
         }
         
         .user-message {
-            background: #007bff;
-            color: white;
+            background: var(--chat-user-bg);
+            color: var(--chat-user-text);
             margin-left: 20px;
             border-bottom-right-radius: 4px;
         }
         
         .bot-message {
-            background: white;
-            color: #333;
-            border: 1px solid #dee2e6;
+            background: var(--chat-bg-primary);
+            color: var(--chat-text);
+            border: 1px solid var(--chat-border);
             margin-right: 20px;
             border-bottom-left-radius: 4px;
         }
         
         .success-message {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background: var(--chat-success-bg);
+            color: var(--chat-success-text);
+            border: 1px solid var(--chat-success-border);
             margin-right: 20px;
             border-bottom-left-radius: 4px;
         }
         
         .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            background: var(--chat-error-bg);
+            color: var(--chat-error-text);
+            border: 1px solid var(--chat-error-border);
             margin-right: 20px;
             border-bottom-left-radius: 4px;
         }
         
-        /* Typing indicator */
+        /* Typing indicator with theme awareness */
         .typing-indicator {
-            background: white;
-            color: #666;
-            border: 1px solid #dee2e6;
+            background: var(--chat-bg-primary);
+            color: var(--chat-text-muted);
+            border: 1px solid var(--chat-border);
             margin-right: 20px;
             border-bottom-left-radius: 4px;
             display: flex;
@@ -88,6 +165,7 @@ class SidebarChatWidget:
             padding: 10px 12px;
             margin: 8px 0;
             border-radius: 12px;
+            box-shadow: 0 1px 3px var(--chat-shadow);
         }
         
         .typing-dots {
@@ -99,7 +177,7 @@ class SidebarChatWidget:
             width: 5px;
             height: 5px;
             border-radius: 50%;
-            background: #007bff;
+            background: var(--chat-user-bg);
             animation: typing-bounce 1.4s infinite ease-in-out;
         }
         
@@ -111,14 +189,16 @@ class SidebarChatWidget:
             30% { opacity: 1; transform: translateY(-5px); }
         }
         
-        /* Empty state styling */
+        /* Empty state styling with theme awareness */
         .chat-empty {
             text-align: center;
-            color: #6c757d;
+            color: var(--chat-text-muted);
             padding: 20px 10px;
-            border: 2px dashed #dee2e6;
+            border: 2px dashed var(--chat-border);
             border-radius: 12px;
             margin: 20px 0;
+            background: var(--chat-bg-primary);
+            transition: all 0.2s ease;
         }
         
         .chat-empty-icon {
@@ -127,45 +207,124 @@ class SidebarChatWidget:
             opacity: 0.5;
         }
         
-        /* Input area improvements */
+        /* Input area improvements with theme awareness */
         .stSidebar .stTextInput > div > div > input {
             border-radius: 20px;
-            border: 1px solid #ced4da;
+            border: 1px solid var(--chat-border) !important;
             padding: 8px 15px;
             font-size: 13px;
+            background-color: var(--chat-bg-primary) !important;
+            color: var(--chat-text) !important;
+            transition: all 0.2s ease;
         }
         
         .stSidebar .stTextInput > div > div > input:focus {
-            border-color: #007bff;
-            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+            border-color: var(--chat-user-bg) !important;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25) !important;
+            outline: none !important;
+        }
+        
+        .stSidebar .stTextInput > div > div > input::placeholder {
+            color: var(--chat-text-muted) !important;
         }
         
         .stSidebar .stButton > button {
-            background: #007bff;
-            color: white;
+            background: var(--chat-user-bg) !important;
+            color: var(--chat-user-text) !important;
             border-radius: 20px;
-            border: none;
+            border: none !important;
             padding: 8px 20px;
             font-size: 13px;
             font-weight: 500;
             width: 100%;
+            transition: all 0.2s ease;
         }
         
         .stSidebar .stButton > button:hover {
-            background: #0056b3;
+            background: color-mix(in srgb, var(--chat-user-bg) 80%, black 20%) !important;
+            transform: translateY(-1px);
         }
         
         .stSidebar .stButton > button:disabled {
-            background: #6c757d;
+            background: var(--chat-text-muted) !important;
+            opacity: 0.6;
+            transform: none;
         }
         
-        /* Enter key hint */
+        /* Enter key hint with theme awareness */
         .enter-hint {
             font-size: 11px;
-            color: #6c757d;
+            color: var(--chat-text-muted);
             text-align: center;
             margin-top: 5px;
             font-style: italic;
+        }
+
+        /* Scrollbar styling for chat area */
+        .stSidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .stSidebar::-webkit-scrollbar-track {
+            background: var(--chat-bg-secondary);
+        }
+        
+        .stSidebar::-webkit-scrollbar-thumb {
+            background: var(--chat-border);
+            border-radius: 2px;
+        }
+        
+        .stSidebar::-webkit-scrollbar-thumb:hover {
+            background: var(--chat-text-muted);
+        }
+
+        /* Expander styling for better theme integration */
+        .stSidebar .streamlit-expanderHeader {
+            background: var(--chat-bg-primary) !important;
+            color: var(--chat-text) !important;
+            border: 1px solid var(--chat-border) !important;
+        }
+        
+        .stSidebar .streamlit-expanderContent {
+            background: var(--chat-bg-primary) !important;
+            border: 1px solid var(--chat-border) !important;
+            border-top: none !important;
+        }
+
+        /* Better visual hierarchy */
+        .stSidebar h3 {
+            color: var(--chat-text) !important;
+            font-weight: 600;
+        }
+
+        .stSidebar hr {
+            border-color: var(--chat-border) !important;
+            opacity: 0.3;
+        }
+
+        /* Hover effects for interactive elements */
+        .chat-message:hover {
+            transform: translateX(2px);
+        }
+
+        .user-message:hover {
+            transform: translateX(-2px);
+        }
+
+        /* Animation for new messages */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chat-message {
+            animation: slideIn 0.3s ease-out;
         }
         </style>
         """, unsafe_allow_html=True)
