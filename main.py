@@ -475,7 +475,7 @@ class StreamlitResumeApp:
         # Handle chat processing FIRST (before any UI rendering)
         self.chat_widget.handle_message_processing()
         
-        st.title("🤖 AI-Powered Resume Customization System")
+        st.title("📝 ResumeBot")
         st.markdown("Transform your resume to match any job description using AI and your GitHub projects!")
         
         if not self.validate_environment():
@@ -661,4 +661,5 @@ class StreamlitResumeApp:
 # Run the application
 if __name__ == "__main__":
     app = StreamlitResumeApp()
+
     app.run()
