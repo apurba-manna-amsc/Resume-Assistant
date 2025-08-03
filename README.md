@@ -1,4 +1,4 @@
-# 🤖 Resume Assistant
+# 🤖 ResumeBot
 
 Transform your resume to match any job description using AI and your GitHub projects, with an intelligent chatbot for further customization!
 
