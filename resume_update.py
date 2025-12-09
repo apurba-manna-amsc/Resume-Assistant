@@ -25,7 +25,7 @@ class ResumeUpdater:
             "Content-Type": "application/json"
         }
         # Choose your preferred model
-        self.llm_model = "llama3-70b-8192"  # Options: llama-3.1-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768
+        self.llm_model = "llama-3.3-70b-versatile"  # Options: llama-3.1-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768
         
         print(f"🔑 API Key loaded: {'✅' if self.groq_api_key else '❌'}")
         print(f"🤖 Using model: {self.llm_model}")
@@ -251,4 +251,5 @@ Return ONLY a valid Python list of update commands, no extra text. For example:
                 continue
         
         print(f"🎯 Successfully executed {executed_commands}/{len(commands)} commands")
+
         return resume
