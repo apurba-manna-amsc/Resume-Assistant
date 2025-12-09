@@ -16,7 +16,7 @@ class ResumeGenerator:
     def __init__(self):
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.groq_api_url = "https://api.groq.com/openai/v1/chat/completions"
-        self.llm_model = "llama3-70b-8192"
+        self.llm_model = "llama-3.3-70b-versatile"
         
         if not self.groq_api_key:
             raise ValueError("GROQ_API_KEY not found in environment variables")
@@ -26,7 +26,7 @@ class ResumeGenerator:
             "Content-Type": "application/json"
         }
     
-    def summarize_readme(self, readme_text: str, repo_name: str,llm_model = "llama3-70b-8192") -> str:
+    def summarize_readme(self, readme_text: str, repo_name: str,llm_model = "llama-3.3-70b-versatile") -> str:
         """
         Enhanced README summarization for resume-ready project descriptions
         
@@ -472,4 +472,5 @@ if __name__ == "__main__":
     filename = generator.generate_structured_resume(sample_resume, 
                                                      project_summaries="Sample project summaries",
                                                      job_description="Sample job description")
+
     print(f"Resume generated: {filename}")
