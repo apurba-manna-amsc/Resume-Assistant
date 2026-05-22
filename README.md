@@ -76,19 +76,25 @@ Try the application here: [Resume Assistant](https://resume-assistant-bxjnp2xgwg
 
 ```
 resume-assistant/
-├── main.py                    # Streamlit entry point
-├── streamlit_app.py           # UI: inputs, GitHub, editor, PDF, chat
-├── groq_resume_service.py     # Groq: README summaries & resume JSON
-├── resume_pdf_exporter.py     # ReportLab PDF export
-├── resume_chat_sidebar.py     # Sidebar chat UI
-├── resume_chat_editor.py      # Chat → resume JSON update commands
-├── docs/CODE_REFERENCE.md     # File & function descriptions
+├── main.py                         # Streamlit entry point
+├── streamlit_app.py                # Compatibility shim → resume_assistant.ui
+├── resume_assistant/               # Main Python package (modular)
+│   ├── config/                     # Settings from .env
+│   ├── core/                       # Errors & user-facing messages
+│   ├── integrations/groq/          # Groq client, models, rate limits
+│   ├── integrations/github/        # GitHub README fetch
+│   ├── services/                   # File parser, chat editor
+│   ├── export/                     # PDF export
+│   ├── prompts/                    # LLM prompts
+│   └── ui/                         # Streamlit app & components
+├── docs/
+│   ├── ARCHITECTURE.md             # Layering & module map
+│   └── CODE_REFERENCE.md
 ├── requirements.txt
-├── .env.example               # Copy to .env and add your API key
-└── README.md
+└── .env.example
 ```
 
-See [docs/CODE_REFERENCE.md](docs/CODE_REFERENCE.md) for every module and function.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/CODE_REFERENCE.md](docs/CODE_REFERENCE.md).
 
 ## 🔧 Configuration
 

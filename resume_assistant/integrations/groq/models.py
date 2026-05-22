@@ -9,11 +9,12 @@ from typing import Any, Dict, List, Optional, Set
 
 import requests
 
-from app_errors import GroqApiError, groq_error_from_exception
+from resume_assistant.core.errors import GroqApiError, groq_error_from_exception
+from resume_assistant.integrations.groq.constants import GROQ_MODELS_URL
 
 logger = logging.getLogger(__name__)
 
-MODELS_URL = "https://api.groq.com/openai/v1/models"
+MODELS_URL = GROQ_MODELS_URL
 
 # Chat-capable models suitable for resume generation (excludes audio / guard-only).
 CHAT_MODEL_BLOCKLIST = (
@@ -32,9 +33,11 @@ DEFAULT_FREE_MODEL_IDS: Set[str] = {
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "qwen/qwen3-32b",
-    "allam-2-7b",
     "groq/compound-mini",
 }
+
+# Small-context models (e.g. allam-2-7b at 4096) are poor for long README summarization.
+MIN_CONTEXT_FOR_README = 8192
 
 
 @dataclass(frozen=True)
@@ -51,7 +54,14 @@ class GroqModelInfo:
     @property
     def label(self) -> str:
         tier = "Free" if self.is_free else "Paid / limited"
-        return f"{self.id} ({tier})"
+        ctx_note = ""
+        if self.context_window and self.context_window < MIN_CONTEXT_FOR_README:
+            ctx_note = f", {self.context_window // 1000}k ctx"
+        return f"{self.id} ({tier}{ctx_note})"
+
+    @property
+    def supports_long_readme(self) -> bool:
+        return self.context_window >= MIN_CONTEXT_FOR_README
 
 
 def _load_free_model_ids() -> Set[str]:

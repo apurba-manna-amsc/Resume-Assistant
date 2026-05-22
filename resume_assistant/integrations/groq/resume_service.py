@@ -4,15 +4,14 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from app_errors import GroqApiError, ResumeJsonParseError
-from groq_client import GroqClient
-from groq_rate_limiter import RateLimitSnapshot
-from resume_json_prompt import build_tailored_resume_prompt
+from resume_assistant.core.errors import ResumeJsonParseError
+from resume_assistant.integrations.groq.client import GroqClient
+from resume_assistant.integrations.groq.constants import FALLBACK_MODEL_ID
+from resume_assistant.integrations.groq.rate_limiter import RateLimitSnapshot
+from resume_assistant.integrations.groq.context_utils import truncate_text_for_model
+from resume_assistant.prompts.resume_json import build_tailored_resume_prompt
 
 logger = logging.getLogger(__name__)
-
-# Lighter model used when the primary model returns 429
-FALLBACK_MODEL_ID = "llama-3.1-8b-instant"
 
 
 class GroqResumeService:
@@ -43,6 +42,10 @@ class GroqResumeService:
             return f"Project: {repo_name} — no README content available."
 
         model = llm_model or self.llm_model
+        models = self.client.fetch_chat_models()
+        readme_for_model = truncate_text_for_model(
+            readme_text, model, models, reserved_tokens=900, output_tokens=300
+        )
         prompt = f"""
 You are an expert technical resume writer. Transform this GitHub README into a concise, professional project summary for a resume.
 
@@ -50,7 +53,7 @@ You are an expert technical resume writer. Transform this GitHub README into a c
 
 **README Content:**
 \"\"\"
-{readme_text[:12000]}
+{readme_for_model}
 \"\"\"
 
 Provide only the summary text. Use action verbs, technical keywords, and ATS-friendly language.

@@ -2,12 +2,10 @@
 
 import logging
 
-from streamlit_app import ResumeAssistantApp
+from resume_assistant.ui import ResumeAssistantApp
+from resume_assistant.ui.logging_setup import configure_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+configure_logging()
 
 if __name__ == "__main__":
     try:

@@ -3,9 +3,9 @@
 import streamlit as st
 import time
 from typing import Dict, Any
-from app_errors import AppError, format_exception_for_user, log_exception
-from groq_client import GroqClient
-from resume_chat_editor import ResumeChatEditor
+from resume_assistant.core.errors import AppError, format_exception_for_user, log_exception
+from resume_assistant.integrations.groq import GroqClient
+from resume_assistant.services.chat_editor import ResumeChatEditor
 
 
 class ResumeChatSidebar:

@@ -9,14 +9,26 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from dotenv import load_dotenv
 
-from app_errors import ConfigurationError, GroqApiError, groq_error_from_exception
-from groq_models import GroqModelInfo, default_model_id, fetch_groq_models
-from groq_rate_limiter import GroqRateLimiter, RateLimitSnapshot
+from resume_assistant.core.errors import ConfigurationError, GroqApiError, groq_error_from_exception
+from resume_assistant.integrations.groq.constants import GROQ_CHAT_URL
+from resume_assistant.integrations.groq.models import GroqModelInfo, default_model_id, fetch_groq_models
+from resume_assistant.integrations.groq.rate_limiter import GroqRateLimiter, RateLimitSnapshot
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+CHAT_URL = GROQ_CHAT_URL
+
+
+def _is_context_length_error(response: requests.Response) -> bool:
+    try:
+        body = response.json()
+        err = body.get("error", {})
+        msg = err.get("message", "") if isinstance(err, dict) else str(err)
+    except (ValueError, AttributeError, requests.exceptions.JSONDecodeError):
+        msg = response.text[:300]
+    lower = msg.lower()
+    return "reduce the length" in lower or "context length" in lower or "too large" in lower
 
 
 class GroqClient:
@@ -75,8 +87,8 @@ class GroqClient:
                 if response.status_code == 429:
                     self.rate_limiter.wait_after_429(model, response.headers)
                     last_error = requests.HTTPError(response=response)
-                    if attempt >= max_retries and fallback_model and fallback_model != model:
-                        logger.info("Switching fallback model to %s", fallback_model)
+                    if fallback_model and fallback_model != model:
+                        logger.info("Rate limit on %s, switching to %s", model, fallback_model)
                         model = fallback_model
                     continue
 
@@ -94,12 +106,26 @@ class GroqClient:
                 last_error = exc
                 if exc.response is not None:
                     self.rate_limiter.update_from_headers(model, exc.response.headers)
-                    if exc.response.status_code == 429:
-                        if attempt < max_retries:
-                            self.rate_limiter.wait_after_429(model, exc.response.headers)
-                            if fallback_model and fallback_model != model:
-                                model = fallback_model
-                            continue
+                    status = exc.response.status_code
+                    if status == 429 and attempt < max_retries:
+                        self.rate_limiter.wait_after_429(model, exc.response.headers)
+                        if fallback_model and fallback_model != model:
+                            model = fallback_model
+                        continue
+                    if (
+                        status == 400
+                        and attempt < max_retries
+                        and fallback_model
+                        and fallback_model != model
+                        and _is_context_length_error(exc.response)
+                    ):
+                        logger.info(
+                            "Context length exceeded for %s, switching to %s",
+                            model,
+                            fallback_model,
+                        )
+                        model = fallback_model
+                        continue
                 if attempt >= max_retries:
                     raise groq_error_from_exception(exc) from exc
                 logger.warning("Groq HTTP error attempt %s/%s: %s", attempt, max_retries, exc)

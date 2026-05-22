@@ -102,6 +102,15 @@ def _safe_groq_message(response: Optional[requests.Response], fallback: str = ""
             msg = err.get("message", "") if isinstance(err, dict) else str(err)
         except (json.JSONDecodeError, ValueError, AttributeError):
             msg = response.text[:200]
+        if msg and (
+            "reduce the length" in msg.lower()
+            or "context length" in msg.lower()
+            or "too large" in msg.lower()
+        ):
+            return (
+                f"{msg} Try a larger-context model (e.g. llama-3.3-70b-versatile or "
+                "llama-3.1-8b-instant) in AI model settings."
+            )
         return f"AI request was rejected: {msg or 'bad request'}"
     if status >= 500:
         return "The AI service is temporarily down. Please try again in a few minutes."

@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 import os
 
-from app_errors import PdfExportError
+from resume_assistant.core.errors import PdfExportError
 
 logger = logging.getLogger(__name__)
 

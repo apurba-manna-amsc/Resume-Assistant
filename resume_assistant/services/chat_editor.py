@@ -6,9 +6,9 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from app_errors import ChatUpdateError
-from groq_client import GroqClient
-from groq_resume_service import FALLBACK_MODEL_ID
+from resume_assistant.core.errors import ChatUpdateError
+from resume_assistant.integrations.groq.client import GroqClient
+from resume_assistant.integrations.groq.constants import FALLBACK_MODEL_ID
 
 logger = logging.getLogger(__name__)
 
