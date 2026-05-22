@@ -352,7 +352,7 @@ class ResumeChatSidebar:
         
         # Sidebar content
         with st.sidebar:
-            st.markdown("### 🤖 Resume Assistant")
+            st.markdown("### Resume assistant")
             st.markdown("---")
             
             # Chat messages area

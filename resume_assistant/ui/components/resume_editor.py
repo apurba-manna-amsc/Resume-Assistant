@@ -21,12 +21,9 @@ def normalize_certification_entry(cert: Any) -> Dict[str, str]:
 
 def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
     """Render expandable Streamlit forms for each resume JSON section."""
-    st.subheader("📝 Edit Your Resume")
-    
     edited_data = {}
-    
-    # Overview Section
-    with st.expander("👤 Overview", expanded=True):
+
+    with st.expander("Overview", expanded=True):
         overview = resume_data.get("overview", {})
         col1, col2 = st.columns(2)
         with col1:
@@ -46,8 +43,7 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
             "professional_summary": professional_summary
         }
     
-    # Contact Information
-    with st.expander("📞 Contact Information", expanded=True):
+    with st.expander("Contact", expanded=False):
         contact_info = resume_data.get("contact_info", {})
         profile_links = contact_info.get("profile_links", {})
         
@@ -78,8 +74,7 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
     
-    # Skills
-    with st.expander("🛠️ Skills", expanded=True):
+    with st.expander("Skills", expanded=True):
         skills = resume_data.get("skills", [])
         skill_text = ", ".join(skills) if isinstance(skills, list) else str(skills)
         skills_input = st.text_area("Skills (comma-separated)", 
@@ -88,13 +83,12 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                                   help="Enter skills separated by commas")
         edited_data["skills"] = [skill.strip() for skill in skills_input.split(",") if skill.strip()]
     
-    # Work Experience
-    with st.expander("💼 Work Experience", expanded=True):
+    with st.expander("Work experience", expanded=True):
         work_experience = resume_data.get("work_experience", [])
         edited_data["work_experience"] = []
         
         # Add button to add new experience
-        if st.button("➕ Add New Experience"):
+        if st.button("Add experience", key="add_work_exp"):
             work_experience.append({
                 "title": "",
                 "company": "",
@@ -104,7 +98,9 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
             })
         
         for i, exp in enumerate(work_experience):
-            st.markdown(f"**Experience {i + 1}**")
+            if i > 0:
+                st.divider()
+            st.markdown(f"**Role {i + 1}**")
             col1, col2 = st.columns(2)
             with col1:
                 title = st.text_input(f"Job Title", value=exp.get("title", ""), key=f"exp_title_{i}")
@@ -137,13 +133,12 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                 "description": description_list
             })
     
-    # Projects
-    with st.expander("🚀 Projects", expanded=True):
+    with st.expander("Projects", expanded=True):
         projects = resume_data.get("projects", [])
         edited_data["projects"] = []
         
         # Add button to add new project
-        if st.button("➕ Add New Project"):
+        if st.button("Add project", key="add_project"):
             projects.append({
                 "name": "",
                 "duration": "",
@@ -153,6 +148,8 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
             })
         
         for i, proj in enumerate(projects):
+            if i > 0:
+                st.divider()
             st.markdown(f"**Project {i + 1}**")
             col1, col2 = st.columns(2)
             with col1:
@@ -195,13 +192,12 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                 "links": [link.strip() for link in links_input.split("\n") if link.strip()]
             })
     
-    # Education
-    with st.expander("🎓 Education", expanded=True):
+    with st.expander("Education", expanded=False):
         education = resume_data.get("education", [])
         edited_data["education"] = []
         
         # Add button to add new education
-        if st.button("➕ Add New Education"):
+        if st.button("Add education", key="add_education"):
             education.append({
                 "degree": "",
                 "institution": "",
@@ -223,13 +219,12 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                 "duration": duration
             })
     
-    # Certifications
-    with st.expander("🏆 Certifications", expanded=False):
+    with st.expander("Certifications", expanded=False):
         certifications = resume_data.get("certifications", [])
         edited_data["certifications"] = []
         
         # Add button to add new certification
-        if st.button("➕ Add New Certification"):
+        if st.button("Add certification", key="add_cert"):
             certifications.append({
                 "name": "",
                 "issuer": "",
@@ -255,8 +250,7 @@ def render_resume_form_editor(resume_data: Dict[str, Any]) -> Dict[str, Any]:
                 "credential_id": credential_id
             })
     
-    # Achievements
-    with st.expander("🏅 Achievements", expanded=False):
+    with st.expander("Achievements", expanded=False):
         achievements = resume_data.get("achievements", [])
         if isinstance(achievements, list):
             achievements_text = "\n".join([f"• {ach}" for ach in achievements])

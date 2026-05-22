@@ -33,6 +33,12 @@ from resume_assistant.ui.components.model_settings import (
 )
 from resume_assistant.ui.components.resume_editor import render_resume_form_editor
 from resume_assistant.ui.logging_setup import configure_logging
+from resume_assistant.ui.theme import (
+    inject_app_styles,
+    render_page_header,
+    render_readiness_bar,
+    render_resume_preview_card,
+)
 
 load_dotenv()
 configure_logging()
@@ -50,10 +56,10 @@ class ResumeAssistantApp:
 
     def _configure_page(self) -> None:
         st.set_page_config(
-            page_title="AI Resume Customization System",
+            page_title="ResumeBot — AI Resume Tailor",
             page_icon="📄",
             layout="wide",
-            initial_sidebar_state="collapsed",
+            initial_sidebar_state="expanded",
         )
 
     @property
@@ -112,23 +118,7 @@ class ResumeAssistantApp:
             log_exception("Unhandled app error", exc)
             show_user_error(exc)
 
-    def _run_app_body(self) -> None:
-        st.title("ResumeBot")
-        st.markdown(
-            "Transform your resume to match any job description using AI and your GitHub projects."
-        )
-
-        if not self.ensure_groq_api_key_configured():
-            return
-
-        render_groq_model_settings()
-
-        if st.session_state.get("resume_data"):
-            try:
-                self.chat_sidebar.process_pending_chat_updates()
-            except AppError as exc:
-                show_user_error(exc, context="Chat assistant")
-
+    def _init_session_defaults(self) -> None:
         for key, default in (
             ("resume_data", None),
             ("project_summaries", {}),
@@ -137,134 +127,251 @@ class ResumeAssistantApp:
             if key not in st.session_state:
                 st.session_state[key] = default
 
-        st.header("Input information")
-        manual_projects = self._render_inputs()
-        self._render_generate_section(manual_projects)
+    def _render_sidebar(self) -> None:
+        with st.sidebar:
+            st.markdown("### Settings")
+            render_groq_model_settings(in_sidebar=True)
+            if st.session_state.get("resume_data"):
+                st.divider()
+                st.markdown("### Resume assistant")
+                st.caption(
+                    "After generating, use the chat below to edit sections "
+                    '(e.g. "Add Python to my skills").'
+                )
+
+    def _run_app_body(self) -> None:
+        inject_app_styles()
+        render_page_header()
+
+        if not self.ensure_groq_api_key_configured():
+            return
+
+        self._init_session_defaults()
+        self._render_sidebar()
+
+        if st.session_state.get("resume_data"):
+            try:
+                self.chat_sidebar.process_pending_chat_updates()
+            except AppError as exc:
+                show_user_error(exc, context="Chat assistant")
+
+        manual_projects = st.session_state.project_summaries.get("manual_projects", "")
+
+        tab_resume, tab_projects, tab_job = st.tabs(
+            ["Resume", "Projects", "Job description"]
+        )
+
+        with tab_resume:
+            self._render_resume_input()
+        with tab_projects:
+            manual_projects = self._render_projects_input(manual_projects)
+        with tab_job:
+            job_description = self._render_job_input()
+
+        render_readiness_bar(
+            has_resume=bool(st.session_state.extracted_resume_text.strip()),
+            has_projects=bool(st.session_state.project_summaries),
+            has_job=bool(job_description.strip()),
+            has_generated=bool(st.session_state.resume_data),
+        )
+
+        self._render_generate_section(manual_projects, job_description)
         self._render_edit_and_export()
         self.chat_sidebar.render_sidebar_chat()
 
-    def _render_inputs(self) -> str:
-        manual_projects = ""
-        with st.expander("Resume input", expanded=True):
-            method = st.radio("Choose input method:", ["Upload File", "Paste Text"])
-            if method == "Upload File":
-                uploaded = st.file_uploader("Upload your resume", type=["txt", "pdf", "md"])
-                if uploaded:
-                    try:
-                        text = parse_uploaded_resume_text(uploaded)
-                        st.session_state.extracted_resume_text = text
-                        st.success("Resume file loaded successfully.")
-                        with st.expander("View extracted text", expanded=False):
-                            st.text_area("Extracted resume text", value=text, height=300, disabled=True)
-                    except FileProcessingError as exc:
-                        show_user_error(exc, context="Resume upload")
-                        st.session_state.extracted_resume_text = ""
-            else:
-                st.session_state.extracted_resume_text = st.text_area(
-                    "Paste your resume text here:", height=200
-                )
-
-        with st.expander("Projects input", expanded=True):
-            source = st.radio(
-                "Choose project source:",
-                ["GitHub Username", "Manual Input", "Both"],
+    def _render_resume_input(self) -> str:
+        st.caption("Upload or paste your current resume.")
+        method = st.radio(
+            "Input method",
+            ["Upload file", "Paste text"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        if method == "Upload file":
+            uploaded = st.file_uploader(
+                "Resume file",
+                type=["txt", "pdf", "md"],
+                help="Supported: TXT, PDF, Markdown",
             )
-            if source in ("GitHub Username", "Both"):
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    username = st.text_input("GitHub Username:")
-                with c2:
-                    token = st.text_input("GitHub Token (Optional):", type="password")
-                if username and st.button("Fetch & summarize GitHub projects"):
+            if uploaded:
+                try:
+                    text = parse_uploaded_resume_text(uploaded)
+                    st.session_state.extracted_resume_text = text
+                    st.success(f"Loaded **{uploaded.name}** ({len(text):,} characters).")
+                    with st.expander("Preview extracted text", expanded=False):
+                        st.text_area(
+                            "Extracted text",
+                            value=text,
+                            height=280,
+                            disabled=True,
+                            label_visibility="collapsed",
+                        )
+                except FileProcessingError as exc:
+                    show_user_error(exc, context="Resume upload")
+                    st.session_state.extracted_resume_text = ""
+        else:
+            st.session_state.extracted_resume_text = st.text_area(
+                "Paste resume text",
+                value=st.session_state.extracted_resume_text,
+                height=220,
+                placeholder="Paste your full resume here…",
+            )
+        return ""
+
+    def _render_projects_input(self, manual_projects: str) -> str:
+        st.caption("Import GitHub READMEs or describe projects manually.")
+        source = st.radio(
+            "Project source",
+            ["GitHub", "Manual", "Both"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        if source in ("GitHub", "Both"):
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                username = st.text_input("GitHub username", placeholder="octocat")
+            with c2:
+                token = st.text_input(
+                    "Token (optional)",
+                    type="password",
+                    help="Increases rate limits for private repos you can access.",
+                )
+            if username:
+                if st.button(
+                    "Fetch & summarize repositories",
+                    type="secondary",
+                    use_container_width=True,
+                ):
                     try:
-                        with st.spinner("Fetching GitHub repositories..."):
+                        with st.spinner("Fetching GitHub repositories…"):
                             repos = fetch_github_readmes_with_ui(username, token)
                         if repos:
-                            with st.spinner("Summarizing projects with AI..."):
+                            with st.spinner("Summarizing with AI (rate limits auto-managed)…"):
                                 summaries = summarize_projects_with_ui(
                                     repos, self.groq_resume_service
                                 )
                             st.session_state.project_summaries.update(summaries)
-                            st.success(f"Processed {len(summaries)} project(s) from GitHub.")
-                            with st.expander("View processed projects", expanded=False):
+                            st.success(f"Added **{len(summaries)}** project(s).")
+                            with st.expander("Project summaries", expanded=False):
                                 for name, summary in summaries.items():
-                                    preview = summary[:300] + ("..." if len(summary) > 300 else "")
+                                    preview = summary[:280] + (
+                                        "…" if len(summary) > 280 else ""
+                                    )
                                     st.markdown(f"**{name}** — {preview}")
                         else:
                             show_user_warning(
-                                "No README files were found in this user's public repositories."
+                                "No README files found in this user's public repositories."
                             )
                     except AppError as exc:
                         show_user_error(exc, context="GitHub projects")
-            if source in ("Manual Input", "Both"):
-                manual_projects = st.text_area(
-                    "Manual project descriptions:",
-                    placeholder="Describe your projects here...",
-                    height=150,
-                )
-                if manual_projects:
-                    st.session_state.project_summaries["manual_projects"] = manual_projects
 
-        with st.expander("Job description", expanded=True):
-            st.session_state["_job_description"] = st.text_area(
-                "Paste the job description here:",
-                placeholder="Enter the complete job description...",
-                height=200,
-                key="job_description_input",
+        if source in ("Manual", "Both"):
+            manual_projects = st.text_area(
+                "Manual project descriptions",
+                value=manual_projects,
+                placeholder="Describe side projects, internships, or portfolio work…",
+                height=140,
             )
+            if manual_projects.strip():
+                st.session_state.project_summaries["manual_projects"] = manual_projects
+
+        if st.session_state.project_summaries:
+            with st.expander(
+                f"Loaded projects ({len(st.session_state.project_summaries)})",
+                expanded=False,
+            ):
+                for name in st.session_state.project_summaries:
+                    st.markdown(f"- **{name}**")
+
         return manual_projects
 
-    def _render_generate_section(self, manual_projects: str) -> None:
-        job_description = st.session_state.get("_job_description", "")
-        if not st.button("Generate customized resume", type="primary"):
-            return
-        if not st.session_state.extracted_resume_text.strip():
-            show_user_error(AppError("Please upload or paste your resume before generating."), context="Validation")
-            return
-        if not st.session_state.project_summaries and not manual_projects.strip():
-            show_user_error(
-                AppError("Please add GitHub projects or manual project descriptions before generating."),
-                context="Validation",
-            )
-            return
-        if not job_description.strip():
-            show_user_error(AppError("Please paste the target job description before generating."), context="Validation")
-            return
-        try:
-            with st.spinner("Generating customized resume..."):
-                all_projects = "\n\n".join(
-                    f"**{name}**: {content}"
-                    for name, content in st.session_state.project_summaries.items()
-                )
-                if manual_projects.strip():
-                    all_projects += f"\n\n**manual_projects**: {manual_projects}"
-                resume_json = self.groq_resume_service.generate_tailored_resume_json(
-                    st.session_state.extracted_resume_text,
-                    all_projects,
-                    job_description,
-                )
-                st.session_state.resume_data = resume_json
-            if self._is_placeholder_resume(resume_json):
-                show_user_warning(
-                    "Resume was created with a minimal template because generation did not fully complete."
-                )
-            else:
-                st.success("Resume generated successfully.")
-        except (AppError, ResumeJsonParseError) as exc:
-            show_user_error(exc, context="Resume generation")
-        except ValueError as exc:
-            show_user_error(exc, context="Resume generation")
+    def _render_job_input(self) -> str:
+        st.caption("Paste the full job posting so the AI can tailor your resume.")
+        return st.text_area(
+            "Job description",
+            placeholder="Paste the complete job description…",
+            height=240,
+            key="job_description_input",
+        )
+
+    def _render_generate_section(
+        self, manual_projects: str, job_description: str
+    ) -> None:
+        st.markdown(
+            """
+            <div class="rb-action-card">
+                <h3>Generate tailored resume</h3>
+                <p>Uses your resume, projects, and job description with the AI model
+                selected in the sidebar.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        ready = (
+            bool(st.session_state.extracted_resume_text.strip())
+            and bool(st.session_state.project_summaries or manual_projects.strip())
+            and bool(job_description.strip())
+        )
+        if not ready:
+            missing = []
+            if not st.session_state.extracted_resume_text.strip():
+                missing.append("resume")
+            if not st.session_state.project_summaries and not manual_projects.strip():
+                missing.append("projects")
+            if not job_description.strip():
+                missing.append("job description")
+            st.caption(f"Still needed: {', '.join(missing)}.")
+
+        if st.button(
+            "Generate customized resume",
+            type="primary",
+            use_container_width=True,
+            disabled=not ready,
+        ):
+            try:
+                with st.spinner("Generating tailored resume…"):
+                    all_projects = "\n\n".join(
+                        f"**{name}**: {content}"
+                        for name, content in st.session_state.project_summaries.items()
+                    )
+                    if manual_projects.strip():
+                        all_projects += f"\n\n**manual_projects**: {manual_projects}"
+                    resume_json = self.groq_resume_service.generate_tailored_resume_json(
+                        st.session_state.extracted_resume_text,
+                        all_projects,
+                        job_description,
+                    )
+                    st.session_state.resume_data = resume_json
+                if self._is_placeholder_resume(resume_json):
+                    show_user_warning(
+                        "Resume was created with a minimal template because "
+                        "generation did not fully complete."
+                    )
+                else:
+                    st.success("Resume generated. Edit below or use the sidebar chat.")
+                    st.balloons()
+            except (AppError, ResumeJsonParseError) as exc:
+                show_user_error(exc, context="Resume generation")
+            except ValueError as exc:
+                show_user_error(exc, context="Resume generation")
 
     def _render_edit_and_export(self) -> None:
         if not st.session_state.resume_data:
             return
-        st.header("Edit and preview")
+
+        st.divider()
+        st.subheader("Edit & export")
+        render_resume_preview_card(st.session_state.resume_data)
+
         if st.session_state.get("chat_messages"):
             last = st.session_state.chat_messages[-1]
             if last.get("type") == "success":
-                st.info("Resume was updated via the chat assistant.")
-        tab1, tab2 = st.tabs(["Edit resume", "Raw JSON"])
-        with tab1:
+                st.info("Resume updated via the sidebar assistant.")
+
+        tab_edit, tab_json, tab_pdf = st.tabs(["Form editor", "Raw JSON", "PDF export"])
+
+        with tab_edit:
             try:
                 edited = render_resume_form_editor(st.session_state.resume_data)
             except Exception as exc:
@@ -273,46 +380,50 @@ class ResumeAssistantApp:
                 edited = st.session_state.resume_data
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("Save changes"):
+                if st.button("Save changes", type="primary", use_container_width=True):
                     st.session_state.resume_data = edited
                     st.success("Resume saved.")
                     st.rerun()
             with c2:
-                if st.button("Discard unsaved edits"):
+                if st.button("Discard unsaved edits", use_container_width=True):
                     st.rerun()
-        with tab2:
+
+        with tab_json:
             st.json(st.session_state.resume_data)
-        st.header("Export PDF")
-        overview = st.session_state.resume_data.get("overview") or {}
-        safe_name = "".join(
-            c if c.isalnum() or c in (" ", "-", "_") else "_"
-            for c in (overview.get("name") or "resume")
-        ).strip() or "resume"
-        pdf_name = f"{safe_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
-        if st.button("Generate PDF", type="primary", key="generate_pdf_btn"):
-            try:
-                with st.spinner("Building PDF..."):
-                    path = self.pdf_exporter.export_resume_to_pdf(
-                        st.session_state.resume_data, pdf_name
-                    )
-                    with open(path, "rb") as f:
-                        st.session_state["pdf_download_bytes"] = f.read()
-                        st.session_state["pdf_download_name"] = path
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
-                st.success("PDF ready. Use the download button below.")
-            except PdfExportError as exc:
-                show_user_error(exc, context="PDF export")
-            except Exception as exc:
-                log_exception("PDF export", exc)
-                show_user_error(exc, context="PDF export")
-        if st.session_state.get("pdf_download_bytes"):
-            st.download_button(
-                label="Download PDF",
-                data=st.session_state["pdf_download_bytes"],
-                file_name=st.session_state.get("pdf_download_name", "resume.pdf"),
-                mime="application/pdf",
-                key="download_pdf",
-            )
+
+        with tab_pdf:
+            overview = st.session_state.resume_data.get("overview") or {}
+            safe_name = "".join(
+                c if c.isalnum() or c in (" ", "-", "_") else "_"
+                for c in (overview.get("name") or "resume")
+            ).strip() or "resume"
+            pdf_name = f"{safe_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
+            st.caption("Build a PDF from the saved resume JSON (save edits first).")
+            if st.button("Build PDF", type="primary", key="generate_pdf_btn"):
+                try:
+                    with st.spinner("Building PDF…"):
+                        path = self.pdf_exporter.export_resume_to_pdf(
+                            st.session_state.resume_data, pdf_name
+                        )
+                        with open(path, "rb") as f:
+                            st.session_state["pdf_download_bytes"] = f.read()
+                            st.session_state["pdf_download_name"] = path
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    st.success("PDF ready — download below.")
+                except PdfExportError as exc:
+                    show_user_error(exc, context="PDF export")
+                except Exception as exc:
+                    log_exception("PDF export", exc)
+                    show_user_error(exc, context="PDF export")
+            if st.session_state.get("pdf_download_bytes"):
+                st.download_button(
+                    label="Download PDF",
+                    data=st.session_state["pdf_download_bytes"],
+                    file_name=st.session_state.get("pdf_download_name", "resume.pdf"),
+                    mime="application/pdf",
+                    key="download_pdf",
+                    use_container_width=True,
+                )
