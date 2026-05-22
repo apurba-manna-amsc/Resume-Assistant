@@ -60,9 +60,11 @@ Try the application here: [Resume Assistant](https://resume-assistant-bxjnp2xgwg
 
 3. **Set up environment variables**
    
-   Create a `.env` file in the project root:
+   Copy `.env.example` to `.env` and set your key:
    ```env
    GROQ_API_KEY=your_groq_api_key_here
+   GROQ_REQUEST_DELAY_SEC=3
+   GROQ_RETRY_DELAY_SEC=10
    ```
 
 4. **Run the application**
@@ -74,14 +76,19 @@ Try the application here: [Resume Assistant](https://resume-assistant-bxjnp2xgwg
 
 ```
 resume-assistant/
-├── main.py                 # Main Streamlit application
-├── resume_generator.py     # AI resume generation logic
-├── pdf_generator.py        # PDF creation utilities
-├── resume_chat_widget.py   # Intelligent chatbot for resume customization
-├── requirements.txt        # Python dependencies
-├── .env                   # Environment variables (create this)
-└── README.md              # This file
+├── main.py                    # Streamlit entry point
+├── streamlit_app.py           # UI: inputs, GitHub, editor, PDF, chat
+├── groq_resume_service.py     # Groq: README summaries & resume JSON
+├── resume_pdf_exporter.py     # ReportLab PDF export
+├── resume_chat_sidebar.py     # Sidebar chat UI
+├── resume_chat_editor.py      # Chat → resume JSON update commands
+├── docs/CODE_REFERENCE.md     # File & function descriptions
+├── requirements.txt
+├── .env.example               # Copy to .env and add your API key
+└── README.md
 ```
+
+See [docs/CODE_REFERENCE.md](docs/CODE_REFERENCE.md) for every module and function.
 
 ## 🔧 Configuration
 
