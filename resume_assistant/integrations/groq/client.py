@@ -58,6 +58,24 @@ class GroqClient:
     def get_rate_limit_snapshot(self, model_id: str) -> Optional[RateLimitSnapshot]:
         return self.rate_limiter.get_snapshot(model_id)
 
+    def probe_rate_limits(self, model_id: str) -> Optional[RateLimitSnapshot]:
+        """
+        Minimal chat request to read x-ratelimit-* headers for the given model.
+        Used when the user selects a model before any full AI task runs.
+        """
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+            "temperature": 0,
+        }
+        try:
+            self.chat_completion(payload, max_retries=1, fallback_model=None)
+        except GroqApiError:
+            # Headers may still have been stored on the failed response.
+            pass
+        return self.get_rate_limit_snapshot(model_id)
+
     def chat_completion(
         self,
         payload: Dict[str, Any],

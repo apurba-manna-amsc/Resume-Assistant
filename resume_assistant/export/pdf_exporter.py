@@ -6,7 +6,8 @@ from typing import Dict, Any, List
 from datetime import datetime
 import os
 
-from resume_assistant.core.errors import PdfExportError
+from resume_assistant.core.errors import PdfExportError, ResumeValidationError
+from resume_assistant.core.resume_validation import validate_and_normalize_resume
 
 logger = logging.getLogger(__name__)
 
@@ -166,14 +167,14 @@ class ResumePdfExporter:
             else:
                 resume_data = resume_json
 
-            if not isinstance(resume_data, dict):
-                raise PdfExportError("Resume data must be a JSON object before exporting.")
-
-            overview = resume_data.get("overview") or {}
-            if not overview.get("name", "").strip():
-                raise PdfExportError(
-                    "Add your full name under Overview before generating a PDF."
+            validation = validate_and_normalize_resume(resume_data)
+            if not validation.export_ready:
+                detail = "; ".join(validation.errors) or "Invalid resume structure."
+                raise ResumeValidationError(
+                    f"Resume validation failed before PDF export. {detail}",
+                    detail=detail,
                 )
+            resume_data = validation.normalized
 
             doc = SimpleDocTemplate(
                 filename,

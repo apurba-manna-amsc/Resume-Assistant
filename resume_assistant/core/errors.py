@@ -52,6 +52,10 @@ class PdfExportError(AppError):
     """PDF export failed."""
 
 
+class ResumeValidationError(AppError):
+    """Resume JSON failed structural validation."""
+
+
 class ChatUpdateError(AppError):
     """Chat-based resume update failed."""
 

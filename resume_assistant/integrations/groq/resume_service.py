@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from resume_assistant.core.errors import ResumeJsonParseError
+from resume_assistant.core.resume_validation import validate_and_normalize_resume
 from resume_assistant.integrations.groq.client import GroqClient
 from resume_assistant.integrations.groq.constants import FALLBACK_MODEL_ID
 from resume_assistant.integrations.groq.rate_limiter import RateLimitSnapshot
@@ -132,7 +133,13 @@ Provide only the summary text. Use action verbs, technical keywords, and ATS-fri
             raise ResumeJsonParseError(
                 "The AI returned resume data in an unexpected format. Please try again."
             )
-        return resume_data
+
+        validation = validate_and_normalize_resume(resume_data)
+        if not validation.normalized:
+            raise ResumeJsonParseError(
+                "The AI returned resume data that could not be normalized. Please try again."
+            )
+        return validation.normalized
 
     def extract_json_from_llm_response(self, response_text: str) -> str:
         """Strip markdown and extract the outermost JSON object."""

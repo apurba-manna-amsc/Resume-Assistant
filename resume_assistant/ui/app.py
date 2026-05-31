@@ -15,9 +15,14 @@ from resume_assistant.core.errors import (
     FileProcessingError,
     PdfExportError,
     ResumeJsonParseError,
+    ResumeValidationError,
     log_exception,
     show_user_error,
     show_user_warning,
+)
+from resume_assistant.core.resume_validation import (
+    ResumeValidationResult,
+    validate_and_normalize_resume,
 )
 from resume_assistant.export import ResumePdfExporter
 from resume_assistant.integrations.groq import GroqClient, GroqResumeService
@@ -32,6 +37,10 @@ from resume_assistant.ui.components.model_settings import (
     render_groq_model_settings,
 )
 from resume_assistant.ui.components.resume_editor import render_resume_form_editor
+from resume_assistant.ui.components.resume_validation_ui import (
+    render_resume_validation_panel,
+    store_validation_result,
+)
 from resume_assistant.ui.logging_setup import configure_logging
 from resume_assistant.ui.theme import (
     inject_app_styles,
@@ -108,6 +117,13 @@ class ResumeAssistantApp:
     def _is_placeholder_resume(data: Dict[str, Any]) -> bool:
         name = (data.get("overview") or {}).get("name", "")
         return name.strip() in ("", "Your Name")
+
+    @staticmethod
+    def _validate_and_store_resume(data: Dict[str, Any]) -> ResumeValidationResult:
+        result = validate_and_normalize_resume(data)
+        st.session_state.resume_data = result.normalized
+        store_validation_result(result)
+        return result
 
     def run_app(self) -> None:
         try:
@@ -342,14 +358,22 @@ class ResumeAssistantApp:
                         all_projects,
                         job_description,
                     )
-                    st.session_state.resume_data = resume_json
-                if self._is_placeholder_resume(resume_json):
+                    validation = self._validate_and_store_resume(resume_json)
+                if self._is_placeholder_resume(st.session_state.resume_data):
                     show_user_warning(
                         "Resume was created with a minimal template because "
                         "generation did not fully complete."
                     )
                 else:
-                    st.success("Resume generated. Edit below or use the sidebar chat.")
+                    if validation.export_ready:
+                        st.success(
+                            "Resume generated and validated. Edit below or export to PDF."
+                        )
+                    else:
+                        show_user_warning(
+                            "Resume generated but validation reported issues. "
+                            "Open the **Validation** tab before exporting."
+                        )
                     st.balloons()
             except (AppError, ResumeJsonParseError) as exc:
                 show_user_error(exc, context="Resume generation")
@@ -360,16 +384,31 @@ class ResumeAssistantApp:
         if not st.session_state.resume_data:
             return
 
+        if "resume_validation" not in st.session_state:
+            self._validate_and_store_resume(st.session_state.resume_data)
+
+        validation: Optional[ResumeValidationResult] = st.session_state.get(
+            "resume_validation"
+        )
+
         st.divider()
         st.subheader("Edit & export")
         render_resume_preview_card(st.session_state.resume_data)
+
+        if validation:
+            if validation.export_ready:
+                st.caption("Structure validated — ready for PDF export.")
+            else:
+                st.caption("Fix validation errors before exporting to PDF.")
 
         if st.session_state.get("chat_messages"):
             last = st.session_state.chat_messages[-1]
             if last.get("type") == "success":
                 st.info("Resume updated via the sidebar assistant.")
 
-        tab_edit, tab_json, tab_pdf = st.tabs(["Form editor", "Raw JSON", "PDF export"])
+        tab_edit, tab_validate, tab_json, tab_pdf = st.tabs(
+            ["Form editor", "Validation", "Raw JSON", "PDF export"]
+        )
 
         with tab_edit:
             try:
@@ -378,15 +417,32 @@ class ResumeAssistantApp:
                 log_exception("Resume form editor", exc)
                 show_user_error(exc, context="Editor")
                 edited = st.session_state.resume_data
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             with c1:
                 if st.button("Save changes", type="primary", use_container_width=True):
-                    st.session_state.resume_data = edited
-                    st.success("Resume saved.")
+                    result = self._validate_and_store_resume(edited)
+                    if result.export_ready:
+                        st.success("Resume saved and validated.")
+                    else:
+                        show_user_warning(
+                            "Resume saved with validation issues. See the Validation tab."
+                        )
                     st.rerun()
             with c2:
+                if st.button("Re-validate", use_container_width=True):
+                    self._validate_and_store_resume(st.session_state.resume_data)
+                    st.rerun()
+            with c3:
                 if st.button("Discard unsaved edits", use_container_width=True):
                     st.rerun()
+
+        with tab_validate:
+            if validation:
+                render_resume_validation_panel(validation)
+            if st.button("Run validation again", key="revalidate_btn"):
+                result = self._validate_and_store_resume(st.session_state.resume_data)
+                render_resume_validation_panel(result)
+                st.rerun()
 
         with tab_json:
             st.json(st.session_state.resume_data)
@@ -399,7 +455,18 @@ class ResumeAssistantApp:
             ).strip() or "resume"
             pdf_name = f"{safe_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
             st.caption("Build a PDF from the saved resume JSON (save edits first).")
-            if st.button("Build PDF", type="primary", key="generate_pdf_btn"):
+            export_ready = validation.export_ready if validation else False
+            if validation and not export_ready:
+                show_user_warning(
+                    "PDF export is blocked until validation passes. "
+                    "Fix errors in the Validation tab (e.g. add your full name)."
+                )
+            if st.button(
+                "Build PDF",
+                type="primary",
+                key="generate_pdf_btn",
+                disabled=not export_ready,
+            ):
                 try:
                     with st.spinner("Building PDF…"):
                         path = self.pdf_exporter.export_resume_to_pdf(
@@ -413,7 +480,7 @@ class ResumeAssistantApp:
                         except OSError:
                             pass
                     st.success("PDF ready — download below.")
-                except PdfExportError as exc:
+                except (PdfExportError, ResumeValidationError) as exc:
                     show_user_error(exc, context="PDF export")
                 except Exception as exc:
                     log_exception("PDF export", exc)
