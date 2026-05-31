@@ -10,6 +10,10 @@ import streamlit as st
 from resume_assistant.core.errors import show_user_warning
 from resume_assistant.integrations.groq import GroqClient, GroqModelInfo, default_model_id
 from resume_assistant.integrations.groq.rate_limiter import RateLimitSnapshot
+from resume_assistant.ui.components.rate_limit_wait_ui import (
+    attach_wait_callback_to_client,
+    render_rate_limit_wait_banner,
+)
 
 
 def _probe_all_on_refresh() -> bool:
@@ -26,6 +30,7 @@ def init_groq_session() -> None:
     if "groq_client" not in st.session_state:
         st.session_state.groq_client = GroqClient()
     client = st.session_state.groq_client
+    attach_wait_callback_to_client(client)
 
     if "groq_model_catalog" not in st.session_state:
         probe = _probe_all_on_refresh()

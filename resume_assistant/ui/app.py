@@ -33,6 +33,7 @@ from resume_assistant.ui.components.model_settings import (
     init_groq_session,
     render_groq_model_settings,
 )
+from resume_assistant.ui.components.rate_limit_wait_ui import render_rate_limit_wait_banner
 from resume_assistant.ui.components.resume_editor import (
     bump_resume_editor_epoch,
     render_resume_form_editor,
@@ -142,6 +143,7 @@ class ResumeAssistantApp:
 
     def _render_sidebar(self) -> None:
         with st.sidebar:
+            render_rate_limit_wait_banner()
             st.markdown("### Settings")
             render_groq_model_settings(in_sidebar=True)
             if st.session_state.get("resume_data"):
