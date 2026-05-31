@@ -82,9 +82,23 @@ class GroqRateLimiter:
         )
         self.min_interval_sec = float(os.getenv("GROQ_MIN_REQUEST_INTERVAL_SEC", "1.0"))
         self.safety_buffer_sec = float(os.getenv("GROQ_RATE_LIMIT_BUFFER_SEC", "0.5"))
+        self.max_wait_sec = float(os.getenv("GROQ_MAX_WAIT_SEC", "120"))
         self._lock = threading.Lock()
         self._per_model: Dict[str, RateLimitSnapshot] = {}
         self._last_request_at: Dict[str, float] = {}
+
+    def _cap_wait(self, delay: float) -> float:
+        """Never block the UI longer than GROQ_MAX_WAIT_SEC."""
+        if delay <= 0:
+            return 0.0
+        if delay > self.max_wait_sec:
+            logger.warning(
+                "Capping Groq wait from %.1fs to %.1fs (GROQ_MAX_WAIT_SEC)",
+                delay,
+                self.max_wait_sec,
+            )
+            return self.max_wait_sec
+        return delay
 
     def update_from_headers(self, model_id: str, headers: Mapping[str, str]) -> RateLimitSnapshot:
         """Record limits from a successful (or 429) Groq HTTP response."""
@@ -111,6 +125,10 @@ class GroqRateLimiter:
     def get_snapshot(self, model_id: str) -> Optional[RateLimitSnapshot]:
         with self._lock:
             return self._per_model.get(model_id)
+
+    def get_all_snapshots(self) -> Dict[str, RateLimitSnapshot]:
+        with self._lock:
+            return dict(self._per_model)
 
     def wait_before_request(self, model_id: str) -> float:
         """
@@ -151,14 +169,20 @@ class GroqRateLimiter:
             if since_last < self.min_interval_sec:
                 delays.append(self.min_interval_sec - since_last)
 
-        sleep_for = max(delays) if delays else 0.0
+        sleep_for = self._cap_wait(max(delays) if delays else 0.0)
         if sleep_for > 0:
             time.sleep(sleep_for)
         with self._lock:
             self._last_request_at[model_id] = time.time()
         return sleep_for
 
-    def wait_after_429(self, model_id: str, headers: Mapping[str, str]) -> float:
+    def wait_after_429(
+        self,
+        model_id: str,
+        headers: Mapping[str, str],
+        *,
+        sleep: bool = True,
+    ) -> float:
         """Wait after HTTP 429; uses retry-after or reset headers."""
         self.update_from_headers(model_id, headers)
         retry_after = headers.get("retry-after") or headers.get("Retry-After")
@@ -170,6 +194,16 @@ class GroqRateLimiter:
                 delay = self._default_429_delay(model_id)
         else:
             delay = self._default_429_delay(model_id)
+
+        if not sleep:
+            logger.warning(
+                "Groq 429 for %s — not waiting (probe/no-sleep); reset in ~%.1fs",
+                model_id,
+                delay,
+            )
+            return delay
+
+        delay = self._cap_wait(delay)
         logger.warning("Groq 429 for %s — waiting %.1fs", model_id, delay)
         time.sleep(delay)
         return delay

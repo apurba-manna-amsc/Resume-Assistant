@@ -11,7 +11,12 @@ from dotenv import load_dotenv
 
 from resume_assistant.core.errors import ConfigurationError, GroqApiError, groq_error_from_exception
 from resume_assistant.integrations.groq.constants import GROQ_CHAT_URL
-from resume_assistant.integrations.groq.models import GroqModelInfo, default_model_id, fetch_groq_models
+from resume_assistant.integrations.groq.models import (
+    GroqModelInfo,
+    default_model_id,
+    fetch_groq_models,
+    sync_models_with_snapshots,
+)
 from resume_assistant.integrations.groq.rate_limiter import GroqRateLimiter, RateLimitSnapshot
 
 load_dotenv()
@@ -47,10 +52,36 @@ class GroqClient:
         self.rate_limiter = GroqRateLimiter()
         self._models_cache: Optional[List[GroqModelInfo]] = None
 
-    def fetch_chat_models(self, *, refresh: bool = False) -> List[GroqModelInfo]:
+    def fetch_chat_models(
+        self,
+        *,
+        refresh: bool = False,
+        probe_limits: bool = False,
+    ) -> List[GroqModelInfo]:
         if self._models_cache is None or refresh:
             self._models_cache = fetch_groq_models(self.api_key)
+            if probe_limits:
+                self.probe_all_model_limits(self._models_cache)
+            else:
+                self._sync_catalog_limits(self._models_cache)
+        elif probe_limits:
+            self.probe_all_model_limits(self._models_cache)
         return self._models_cache
+
+    def _sync_catalog_limits(self, models: List[GroqModelInfo]) -> None:
+        sync_models_with_snapshots(models, self.rate_limiter.get_all_snapshots())
+
+    def probe_all_model_limits(self, models: Optional[List[GroqModelInfo]] = None) -> None:
+        """Probe each chat model once; limits come from Groq response headers (always current)."""
+        catalog = models or self._models_cache or fetch_groq_models(self.api_key)
+        for model in catalog:
+            self.probe_rate_limits(model.id)
+        self._sync_catalog_limits(catalog)
+        logger.info("Probed rate limits for %s model(s)", len(catalog))
+
+    def refresh_model_catalog(self, *, probe_limits: bool = True) -> List[GroqModelInfo]:
+        """Reload model list from Groq and optionally refresh all rate-limit headers."""
+        return self.fetch_chat_models(refresh=True, probe_limits=probe_limits)
 
     def get_default_model_id(self) -> str:
         return default_model_id(self.fetch_chat_models())
@@ -61,7 +92,7 @@ class GroqClient:
     def probe_rate_limits(self, model_id: str) -> Optional[RateLimitSnapshot]:
         """
         Minimal chat request to read x-ratelimit-* headers for the given model.
-        Used when the user selects a model before any full AI task runs.
+        Never sleeps on 429 — only records headers for the UI.
         """
         payload = {
             "model": model_id,
@@ -70,10 +101,25 @@ class GroqClient:
             "temperature": 0,
         }
         try:
-            self.chat_completion(payload, max_retries=1, fallback_model=None)
-        except GroqApiError:
-            # Headers may still have been stored on the failed response.
-            pass
+            response = requests.post(
+                CHAT_URL,
+                headers=self.headers,
+                json=payload,
+                timeout=30,
+            )
+            self.rate_limiter.update_from_headers(model_id, response.headers)
+            if response.status_code == 429:
+                self.rate_limiter.wait_after_429(
+                    model_id, response.headers, sleep=False
+                )
+            elif response.status_code >= 400:
+                logger.info(
+                    "Rate-limit probe for %s returned HTTP %s (headers still recorded)",
+                    model_id,
+                    response.status_code,
+                )
+        except requests.exceptions.RequestException as exc:
+            logger.warning("Rate-limit probe failed for %s: %s", model_id, exc)
         return self.get_rate_limit_snapshot(model_id)
 
     def chat_completion(

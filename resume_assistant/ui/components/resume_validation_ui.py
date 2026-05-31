@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
 import streamlit as st
 
-from resume_assistant.core.resume_validation import ResumeValidationResult
+from resume_assistant.core.resume_validation import (
+    ResumeValidationResult,
+    validate_and_normalize_resume,
+)
+from resume_assistant.ui.components.resume_editor import bump_resume_editor_epoch
 
 
 def render_resume_validation_panel(result: ResumeValidationResult) -> None:
@@ -40,3 +46,12 @@ def render_resume_validation_panel(result: ResumeValidationResult) -> None:
 
 def store_validation_result(result: ResumeValidationResult) -> None:
     st.session_state["resume_validation"] = result
+
+
+def persist_resume_data(data: Dict[str, Any]) -> ResumeValidationResult:
+    """Validate, save to session, and refresh form widget keys."""
+    result = validate_and_normalize_resume(data)
+    st.session_state.resume_data = result.normalized
+    store_validation_result(result)
+    bump_resume_editor_epoch()
+    return result

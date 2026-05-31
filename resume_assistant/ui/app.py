@@ -20,10 +20,7 @@ from resume_assistant.core.errors import (
     show_user_error,
     show_user_warning,
 )
-from resume_assistant.core.resume_validation import (
-    ResumeValidationResult,
-    validate_and_normalize_resume,
-)
+from resume_assistant.core.resume_validation import ResumeValidationResult
 from resume_assistant.export import ResumePdfExporter
 from resume_assistant.integrations.groq import GroqClient, GroqResumeService
 from resume_assistant.services.file_parser import parse_uploaded_resume_text
@@ -36,10 +33,13 @@ from resume_assistant.ui.components.model_settings import (
     init_groq_session,
     render_groq_model_settings,
 )
-from resume_assistant.ui.components.resume_editor import render_resume_form_editor
+from resume_assistant.ui.components.resume_editor import (
+    bump_resume_editor_epoch,
+    render_resume_form_editor,
+)
 from resume_assistant.ui.components.resume_validation_ui import (
+    persist_resume_data,
     render_resume_validation_panel,
-    store_validation_result,
 )
 from resume_assistant.ui.logging_setup import configure_logging
 from resume_assistant.ui.theme import (
@@ -120,10 +120,7 @@ class ResumeAssistantApp:
 
     @staticmethod
     def _validate_and_store_resume(data: Dict[str, Any]) -> ResumeValidationResult:
-        result = validate_and_normalize_resume(data)
-        st.session_state.resume_data = result.normalized
-        store_validation_result(result)
-        return result
+        return persist_resume_data(data)
 
     def run_app(self) -> None:
         try:
@@ -434,6 +431,7 @@ class ResumeAssistantApp:
                     st.rerun()
             with c3:
                 if st.button("Discard unsaved edits", use_container_width=True):
+                    bump_resume_editor_epoch()
                     st.rerun()
 
         with tab_validate:

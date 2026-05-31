@@ -4,8 +4,7 @@ import streamlit as st
 import time
 from typing import Dict, Any
 from resume_assistant.core.errors import AppError, format_exception_for_user, log_exception
-from resume_assistant.core.resume_validation import validate_and_normalize_resume
-from resume_assistant.ui.components.resume_validation_ui import store_validation_result
+from resume_assistant.ui.components.resume_validation_ui import persist_resume_data
 from resume_assistant.integrations.groq import GroqClient
 from resume_assistant.services.chat_editor import ResumeChatEditor
 
@@ -530,9 +529,7 @@ class ResumeChatSidebar:
                             current_resume, commands
                         )
                         
-                        validation = validate_and_normalize_resume(updated_resume)
-                        st.session_state.resume_data = validation.normalized
-                        store_validation_result(validation)
+                        persist_resume_data(updated_resume)
 
                         # Add success message
                         change_count = len(commands)
